@@ -9,6 +9,16 @@
 		reg = <0x40600000 0x1000>;
 		linux,uio-name = "ddc";
 	};
+	/* IQ DMA: dma_csr regset (sys[7] = 0x4070_0000) + the DDR ring buffer.
+	 * The buffer region must be kernel-reserved (CMA / reserved-memory), as the
+	 * stream_app project does; software programs dma_csr RING_BASE/RING_SIZE to it.
+	 */
+	ddc_iq: ddc_iq@40700000 {
+		compatible = "generic-uio";
+		reg = <0x40700000 0x1000>, <0x01000000 0x01000000>;
+		reg-names = "regset", "buffer";
+		linux,uio-name = "ddc_iq";
+	};
 };
 
 /*

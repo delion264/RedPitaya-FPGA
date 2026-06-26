@@ -540,47 +540,56 @@ wire [16-1:0] adc_state_ch_2_3 = 16'h0;
 wire [16-1:0] axi_state_ch_0_1;
 wire [16-1:0] axi_state_ch_2_3 = 16'h0;
 
-rp_scope_com #(
-  .CHN(0),
-  .N_CH(2),
-  .DW(16),
-  .RSZ(14)) 
-  i_scope (
-  // ADC
-  .adc_dat_i     ({adc_dat[1], adc_dat[0]}  ),
-  .adc_clk_i     ({2{adc_clk}}  ),  // clock
-  .adc_rstn_i    ({2{adc_rstn}} ),  // reset - active low
-  .trig_ext_i    (trig_ext    ),  // external trigger
-  .trig_asg_i    (trig_asg_out),  // ASG trigger
-  .trig_ch_o     (trig_ch_0_1 ),  // output trigger to ADC for other 2 channels
-  .trig_ch_i     (trig_ch_2_3 ),  // input ADC trigger from other 2 channels
-  .trig_ext_asg_o(trig_ext_asg01),
-  .trig_ext_asg_i(trig_ext_asg01),
-  .daisy_trig_o  (scope_trigo ),
-  .adc_state_o   (adc_state_ch_0_1),
-  .adc_state_i   (adc_state_ch_2_3),
-  .axi_state_o   (axi_state_ch_0_1),
-  .axi_state_i   (axi_state_ch_2_3),
-  .trg_state_o   (trg_state_ch_0_1),
-  .trg_state_i   (trg_state_ch_2_3),
-  // AXI0 master                 // AXI1 master
-  .axi_waddr_o  ({axi1_sys.waddr,  axi0_sys.waddr} ),
-  .axi_wdata_o  ({axi1_sys.wdata,  axi0_sys.wdata} ),
-  .axi_wsel_o   ({axi1_sys.wsel,   axi0_sys.wsel}  ),
-  .axi_wvalid_o ({axi1_sys.wvalid, axi0_sys.wvalid}),
-  .axi_wlen_o   ({axi1_sys.wlen,   axi0_sys.wlen}  ),
-  .axi_wfixed_o ({axi1_sys.wfixed, axi0_sys.wfixed}),
-  .axi_werr_i   ({axi1_sys.werr,   axi0_sys.werr}  ),
-  .axi_wrdy_i   ({axi1_sys.wrdy,   axi0_sys.wrdy}  ),
-  // System bus
-  .sys_addr      (sys[1].addr ),
-  .sys_wdata     (sys[1].wdata),
-  .sys_wen       (sys[1].wen  ),
-  .sys_ren       (sys[1].ren  ),
-  .sys_rdata     (sys[1].rdata),
-  .sys_err       (sys[1].err  ),
-  .sys_ack       (sys[1].ack  )
+// ---------------------------------------------------------------------------
+// Legacy oscilloscope removed -- the DDC + wideband FFT supersede it, and dropping
+// it frees HP0 (axi0_sys) for IQ egress while the ASG keeps HP2/HP3 for future TX.
+// Tie off the scope's consumed/declared outputs; stub its sys[1] register slot.
+// ---------------------------------------------------------------------------
+assign scope_trigo      = 1'b0;     // consumed by trig_output_sel (daisy)
+assign trig_ch_0_1      = '0;
+assign trig_ext_asg01   = '0;
+assign adc_state_ch_0_1 = '0;
+assign axi_state_ch_0_1 = '0;
+assign trg_state_ch_0_1 = '0;
+sys_bus_stub sys_bus_stub_1 (sys[1]);
+
+// ---------------------------------------------------------------------------
+// IQ egress (integration increment 2): all on adc_clk -> no CDC.
+//   ddc_top.m_t* -> vita_packetizer -> axis_to_axi_sys -> axi0_sys -> HP0 -> DDR ring
+// axi_master_0 (in red_pitaya_ps) does the AXI4 bursting. dma_csr (sys[7]) holds the
+// ring config + status.
+// ---------------------------------------------------------------------------
+logic [31:0]     iq_tdata;    logic [34-1:0] iq_tuser;   logic iq_tvalid, iq_tready;
+logic [31:0]     pkt_tdata;   logic pkt_tvalid, pkt_tready, pkt_tlast, pkt_ovf;
+logic [4*16-1:0] ddc_pkt_samples;  logic [31:0] ddc_dwell;
+logic            dma_en, dma_clrovf, wr_ovf;
+logic [31:0]     dma_base, dma_size, dma_wptr, dma_wrap, dma_pkt;
+
+vita_packetizer #(.NUM_STREAMS(4)) i_pktz (
+  .clk(adc_clk), .resetn(adc_rstn),
+  .s_tdata(iq_tdata), .s_tuser(iq_tuser), .s_tvalid(iq_tvalid), .s_tready(iq_tready),
+  .slot_pkt_samples(ddc_pkt_samples), .dwell_cycles(ddc_dwell),
+  .m_tdata(pkt_tdata), .m_tvalid(pkt_tvalid), .m_tready(pkt_tready), .m_tlast(pkt_tlast),
+  .overflow(pkt_ovf)
 );
+
+axis_to_axi_sys i_iqdma (
+  .clk(adc_clk), .rstn(adc_rstn),
+  .enable(dma_en), .clr_ovf(dma_clrovf), .ring_base(dma_base), .ring_size(dma_size),
+  .wptr(dma_wptr), .wrap_cnt(dma_wrap), .pkt_cnt(dma_pkt), .ovf(wr_ovf),
+  .s_tdata(pkt_tdata), .s_tvalid(pkt_tvalid), .s_tready(pkt_tready), .s_tlast(pkt_tlast),
+  .axi_waddr (axi0_sys.waddr ), .axi_wdata (axi0_sys.wdata ), .axi_wsel (axi0_sys.wsel ),
+  .axi_wlen  (axi0_sys.wlen  ), .axi_wsize (axi0_sys.wsize ), .axi_wfixed(axi0_sys.wfixed),
+  .axi_wvalid(axi0_sys.wvalid), .axi_wrdy  (axi0_sys.wrdy  ), .axi_werr  (axi0_sys.werr )
+);
+// idle axi0_sys's read-request channel + all of axi1_sys (HP1, reserved for
+// spectrum). rrdym is driven by the PS (axi_master), so we must not drive it.
+assign axi0_sys.raddr='0; assign axi0_sys.rsel='0;  assign axi0_sys.rsize='0;
+assign axi0_sys.rlen ='0; assign axi0_sys.rfixed='0; assign axi0_sys.rvalid=1'b0;
+assign axi1_sys.waddr='0; assign axi1_sys.wdata='0;  assign axi1_sys.wsel ='0; assign axi1_sys.wlen='0;
+assign axi1_sys.wsize='0; assign axi1_sys.wfixed='0; assign axi1_sys.wvalid=1'b0;
+assign axi1_sys.raddr='0; assign axi1_sys.rsel='0;  assign axi1_sys.rsize='0; assign axi1_sys.rlen='0;
+assign axi1_sys.rfixed='0; assign axi1_sys.rvalid=1'b0;
 
 //red_pitaya_scope_Z20 i_scope (
   //// ADC
@@ -783,17 +792,24 @@ red_pitaya_daisy  #(
     .s_axi_rdata  (ddc_rdata ), .s_axi_rresp (ddc_rresp ), .s_axi_rvalid (ddc_rvalid ), .s_axi_rready (ddc_rready ),
     .adc_data     (adc_dat[0]),   // 16-bit signed two's complement, adc_clk
     .adc_valid    (1'b1      ),   // 122-16 ADC is free-running
-    .m_tdata      (          ),   // IQ egress -> increment 2 (packetizer + DMA)
-    .m_tuser      (          ),
-    .m_tvalid     (          ),
-    .m_tready     (1'b1      ),   // sink the IQ stream for now
-    .slot_pkt_samples (      ),
-    .dwell_cycles (          ),
-    .fft_enable   (          ),
+    .m_tdata      (iq_tdata  ),   // -> vita_packetizer (increment 2 egress)
+    .m_tuser      (iq_tuser  ),
+    .m_tvalid     (iq_tvalid ),
+    .m_tready     (iq_tready ),
+    .slot_pkt_samples (ddc_pkt_samples),
+    .dwell_cycles (ddc_dwell ),
+    .fft_enable   (          ),   // spectrum -> increment 3
     .fft_log2_size(          )
   );
+
+  // IQ DMA control/status registers on sys[7] @ 0x4070_0000.
+  dma_csr i_dma_csr (
+    .bus       (sys[7]),
+    .enable    (dma_en),   .ring_base(dma_base), .ring_size(dma_size), .clr_ovf(dma_clrovf),
+    .wptr      (dma_wptr), .wrap_cnt (dma_wrap), .pkt_cnt  (dma_pkt),
+    .ovf       (wr_ovf | pkt_ovf), .busy(axi0_sys.wvalid)
+  );
   `endif
-  sys_bus_stub sys_bus_stub_7 (sys[7]);
 
 `else
 IOBUF i_iobuf (.O(trig_ext), .IO(exp_p_io[0]), .I(1'b0), .T(1'b1) );

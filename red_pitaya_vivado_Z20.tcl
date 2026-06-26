@@ -119,7 +119,8 @@ add_files -fileset constrs_1      $path_sdc_prj/red_pitaya.xdc
 if {$prj_name eq "ddc"} {
   # Scope to OUR VHDL-2008 sources (not the BD's generated IP .vhd).
   set ddc_vhd [get_files -quiet {ddc_top.vhd ddc_csr.vhd ddc_slot.vhd ddc_gain_stage.vhd \
-                 ddc_gain_lut.vhd ddc_fixed_pkg.vhd output_arbiter.vhd axis_switch_n_to_1.vhd}]
+                 ddc_gain_lut.vhd ddc_fixed_pkg.vhd output_arbiter.vhd axis_switch_n_to_1.vhd \
+                 vita_packetizer.vhd vita_framer.vhd pkt_level.vhd}]
   if {[llength $ddc_vhd]} { set_property file_type {VHDL 2008} $ddc_vhd }
   # NOTE: synthesis of red_pitaya_top_Z20 with the DDC completes clean (0 errors).
   # For a full bitstream the four DDC IP cores must be generated *natively* in this
