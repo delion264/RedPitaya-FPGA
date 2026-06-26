@@ -17,3 +17,4 @@ prj/*/.cache/
 prj/ddc/rtl/sdrlab/
 prj/ddc/ip/*.xci
 prj/ddc/ip/*.coe
+prj/*/clockInfo.txt
