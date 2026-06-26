@@ -122,9 +122,28 @@ if {$prj_name eq "ddc"} {
                  ddc_gain_lut.vhd ddc_fixed_pkg.vhd output_arbiter.vhd axis_switch_n_to_1.vhd \
                  vita_packetizer.vhd vita_framer.vhd pkt_level.vhd}]
   if {[llength $ddc_vhd]} { set_property file_type {VHDL 2008} $ddc_vhd }
-  # NOTE: synthesis of red_pitaya_top_Z20 with the DDC completes clean (0 errors).
-  # For a full bitstream the four DDC IP cores must be generated *natively* in this
-  # project (the copied .xci are OOC-locked) -- see sdrlab redpitaya/README.md.
+  # Native IP: add the four DDC cores from the sdrlab managed-IP build (unedited, so
+  # their relative COE paths resolve and they stay unlocked) and OOC-synthesize them
+  # so they aren't black boxes at opt_design. The submodule lives at
+  # sdrlab/redpitaya/RedPitaya-FPGA, so sdrlab is 4 levels up from prj/ddc.
+  # (Path overridable via the DDC_IP_SRC env var for non-submodule checkouts.)
+  if {[info exists ::env(DDC_IP_SRC)]} {
+    set ddc_ip_src $::env(DDC_IP_SRC)
+  } else {
+    set ddc_ip_src [file normalize ../../../../vivado/build/ip_managed/ip_managed.srcs/sources_1/ip]
+  }
+  set ddc_cores {ddc_cic ddc_fir wide_fir axis_switch_core}
+  set ddc_xci {}
+  foreach c $ddc_cores {
+    if {[file exists $ddc_ip_src/$c/$c.xci]} { lappend ddc_xci $ddc_ip_src/$c/$c.xci }
+  }
+  if {[llength $ddc_xci] == [llength $ddc_cores]} {
+    add_files -norecurse $ddc_xci
+    generate_target all [get_ips $ddc_cores]
+    synth_ip [get_ips $ddc_cores]
+  } else {
+    puts "WARN: DDC IP not found under $ddc_ip_src -- run vivado/generate_ip.tcl (synthesis will black-box)."
+  }
 }
 
 ################################################################################
