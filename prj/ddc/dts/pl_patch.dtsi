@@ -1,0 +1,58 @@
+/*
+ * DDC multi-tuner SDR control registers (sys-bus slot 6 = 0x4060_0000).
+ * A sys_bus app (not a BD IP), so it has no auto-generated node -- declare it
+ * under the PL bus. UIO name "ddc" matches DdcBackend::open("ddc").
+ */
+&amba {
+	ddc: ddc@40600000 {
+		compatible = "generic-uio";
+		reg = <0x40600000 0x1000>;
+		linux,uio-name = "ddc";
+	};
+};
+
+/*
+ * Zynq XADC configuration
+*/
+
+&xadc {
+        compatible = "xlnx,axi-xadc-1.00.a";
+        clocks = <&clkc 18>;
+        xlnx,channels {
+                #address-cells = <1>;
+                #size-cells = <0>;
+                channel@0 {
+                        reg = <0>;
+                };
+                channel@1 {
+                        reg = <1>;
+                };
+                channel@2 {
+                        reg = <2>;
+                };
+                channel@9 {
+                        reg = <9>;
+                };
+                channel@10 {
+                        reg = <10>;
+                };
+        };
+};
+
+/ {
+         fragment@9 {
+                target = <&can0>;
+                overlay9: __overlay__ {
+                        status = "okay";
+                };
+        };
+
+        fragment@10 {
+                target = <&can1>;
+                overlay10: __overlay__ {
+                        status = "okay";
+                };
+        };
+};
+
+

@@ -27,6 +27,10 @@ set path_rtl rtl
 set path_ip      ip
 set path_ip_top  ../../ip
 set path_bd  .srcs/sources_1/bd/system/hdl
+# Vivado >=2020.2 writes generated BD/IP products to .gen instead of .srcs.
+if {![file isdirectory $path_bd] && [file isdirectory .gen/sources_1/bd/system/hdl]} {
+  set path_bd .gen/sources_1/bd/system/hdl
+}
 #set path_bd  .srcs/sources_1/bd/system
 set path_sdc ../../sdc
 set path_sdc_prj sdc
@@ -82,6 +86,11 @@ add_files -quiet                  [glob -nocomplain ../../$path_rtl/*_pkg.sv]
 add_files -quiet                  [glob -nocomplain       $path_rtl/*_pkg.sv]
 add_files                         ../../$path_rtl
 add_files                               $path_rtl
+# Resolve the generated BD wrapper now that generate_target has run (Vivado >=2020.2
+# writes it to .gen, not .srcs).
+if {![file isdirectory $path_bd] && [file isdirectory .gen/sources_1/bd/system/hdl]} {
+  set path_bd .gen/sources_1/bd/system/hdl
+}
 add_files                               $path_bd
 
 
@@ -104,6 +113,18 @@ add_files $path_ip_top/sync_fifo/sync_fifo.xci
 }
 
 add_files -fileset constrs_1      $path_sdc_prj/red_pitaya.xdc
+
+# DDC project: force VHDL-2008 on the application RTL (directory add_files defaults
+# to VHDL-93). Guarded so other projects are untouched. See sdrlab redpitaya/README.md.
+if {$prj_name eq "ddc"} {
+  # Scope to OUR VHDL-2008 sources (not the BD's generated IP .vhd).
+  set ddc_vhd [get_files -quiet {ddc_top.vhd ddc_csr.vhd ddc_slot.vhd ddc_gain_stage.vhd \
+                 ddc_gain_lut.vhd ddc_fixed_pkg.vhd output_arbiter.vhd axis_switch_n_to_1.vhd}]
+  if {[llength $ddc_vhd]} { set_property file_type {VHDL 2008} $ddc_vhd }
+  # NOTE: synthesis of red_pitaya_top_Z20 with the DDC completes clean (0 errors).
+  # For a full bitstream the four DDC IP cores must be generated *natively* in this
+  # project (the copied .xci are OOC-locked) -- see sdrlab redpitaya/README.md.
+}
 
 ################################################################################
 # ser parameter containing Git hash

@@ -90,6 +90,14 @@ add_files -fileset constrs_1      $path_sdc_prj/red_pitaya.xdc
 
 import_files -force
 
+# DDC project: its application RTL is VHDL-2008; the directory add_files above
+# registers .vhd as VHDL-93, which rejects process(all)/aggregates. Force 2008 on
+# them (guarded so other projects are untouched). See sdrlab redpitaya/README.md.
+if {$prj_name eq "ddc"} {
+  set ddc_vhd [get_files -quiet *.vhd]
+  if {$ddc_vhd ne ""} { set_property file_type {VHDL 2008} $ddc_vhd }
+}
+
 update_compile_order -fileset sources_1
 
 set_property top red_pitaya_top_Z20 [current_fileset]

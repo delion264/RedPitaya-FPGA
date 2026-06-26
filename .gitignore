@@ -1,0 +1,19 @@
+# Vivado build artifacts
+vivado*.jou
+vivado*.log
+*.backup.jou
+*.backup.log
+.Xil/
+prj/*/out/
+prj/*/.gen/
+prj/*/.srcs/
+prj/*/.Xil/
+prj/*/project/
+prj/*/sdk/
+prj/*/.cache/
+
+# sdrlab DDC project: RTL + IP are populated by sdrlab/redpitaya/setup_ddc_prj.sh
+# (source of truth lives in the sdrlab repo); only the framework edits are tracked here.
+prj/ddc/rtl/sdrlab/
+prj/ddc/ip/*.xci
+prj/ddc/ip/*.coe
