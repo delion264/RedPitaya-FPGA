@@ -551,7 +551,8 @@ assign trig_ext_asg01   = '0;
 assign adc_state_ch_0_1 = '0;
 assign axi_state_ch_0_1 = '0;
 assign trg_state_ch_0_1 = '0;
-sys_bus_stub sys_bus_stub_1 (sys[1]);
+// sys[1] (freed by removing the scope) now hosts the spectrum DMA's dma_csr -- see
+// the spectrum egress block below.
 
 // ---------------------------------------------------------------------------
 // IQ egress (integration increment 2): all on adc_clk -> no CDC.
@@ -586,8 +587,44 @@ axis_to_axi_sys i_iqdma (
 // spectrum). rrdym is driven by the PS (axi_master), so we must not drive it.
 assign axi0_sys.raddr='0; assign axi0_sys.rsel='0;  assign axi0_sys.rsize='0;
 assign axi0_sys.rlen ='0; assign axi0_sys.rfixed='0; assign axi0_sys.rvalid=1'b0;
-assign axi1_sys.waddr='0; assign axi1_sys.wdata='0;  assign axi1_sys.wsel ='0; assign axi1_sys.wlen='0;
-assign axi1_sys.wsize='0; assign axi1_sys.wfixed='0; assign axi1_sys.wvalid=1'b0;
+
+// ---------------------------------------------------------------------------
+// Spectrum egress (integration increment 3): wfft_spectrum -> 2nd DMA -> HP1.
+//   adc tap -> wfft_spectrum -> {bin,power} pack -> axis_to_axi_sys -> axi1_sys
+// enable/size come from the DDC CSR (ddc_top.fft_*); dma_csr on sys[1]. adc_clk.
+// ---------------------------------------------------------------------------
+logic        ddc_fft_enable;  logic [3:0]  ddc_fft_log2;
+logic [15:0] spec_power;      logic [12:0] spec_bin;
+logic        spec_tvalid, spec_tready, spec_tlast;
+logic [31:0] spec_axis;
+logic        sdma_en, sdma_clrovf, sdma_wr_ovf;
+logic [31:0] sdma_base, sdma_size, sdma_wptr, sdma_wrap, sdma_pkt;
+
+wfft_spectrum i_wfft (
+  .clk(adc_clk), .resetn(adc_rstn),
+  .enable(ddc_fft_enable), .fft_log2_size(ddc_fft_log2),
+  .adc_data(adc_dat[0]), .adc_valid(1'b1),
+  .m_tdata(spec_power), .m_tuser(spec_bin), .m_tvalid(spec_tvalid),
+  .m_tready(spec_tready), .m_tlast(spec_tlast), .frame_start()
+);
+assign spec_axis = {3'b000, spec_bin, spec_power};   // {bin[12:0], power[15:0]}
+
+axis_to_axi_sys i_specdma (
+  .clk(adc_clk), .rstn(adc_rstn),
+  .enable(sdma_en), .clr_ovf(sdma_clrovf), .ring_base(sdma_base), .ring_size(sdma_size),
+  .wptr(sdma_wptr), .wrap_cnt(sdma_wrap), .pkt_cnt(sdma_pkt), .ovf(sdma_wr_ovf),
+  .s_tdata(spec_axis), .s_tvalid(spec_tvalid), .s_tready(spec_tready), .s_tlast(spec_tlast),
+  .axi_waddr (axi1_sys.waddr ), .axi_wdata (axi1_sys.wdata ), .axi_wsel (axi1_sys.wsel ),
+  .axi_wlen  (axi1_sys.wlen  ), .axi_wsize (axi1_sys.wsize ), .axi_wfixed(axi1_sys.wfixed),
+  .axi_wvalid(axi1_sys.wvalid), .axi_wrdy  (axi1_sys.wrdy  ), .axi_werr  (axi1_sys.werr )
+);
+dma_csr i_spec_csr (
+  .bus(sys[1]),
+  .enable(sdma_en),   .ring_base(sdma_base), .ring_size(sdma_size), .clr_ovf(sdma_clrovf),
+  .wptr(sdma_wptr),   .wrap_cnt(sdma_wrap),  .pkt_cnt(sdma_pkt),
+  .ovf(sdma_wr_ovf),  .busy(axi1_sys.wvalid)
+);
+// idle axi1_sys's read-request channel (write driven by i_specdma)
 assign axi1_sys.raddr='0; assign axi1_sys.rsel='0;  assign axi1_sys.rsize='0; assign axi1_sys.rlen='0;
 assign axi1_sys.rfixed='0; assign axi1_sys.rvalid=1'b0;
 
@@ -798,8 +835,8 @@ red_pitaya_daisy  #(
     .m_tready     (iq_tready ),
     .slot_pkt_samples (ddc_pkt_samples),
     .dwell_cycles (ddc_dwell ),
-    .fft_enable   (          ),   // spectrum -> increment 3
-    .fft_log2_size(          )
+    .fft_enable   (ddc_fft_enable),   // -> wfft_spectrum (increment 3)
+    .fft_log2_size(ddc_fft_log2  )
   );
 
   // IQ DMA control/status registers on sys[7] @ 0x4070_0000.

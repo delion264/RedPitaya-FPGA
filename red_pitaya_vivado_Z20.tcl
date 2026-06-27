@@ -120,7 +120,7 @@ if {$prj_name eq "ddc"} {
   # Scope to OUR VHDL-2008 sources (not the BD's generated IP .vhd).
   set ddc_vhd [get_files -quiet {ddc_top.vhd ddc_csr.vhd ddc_slot.vhd ddc_gain_stage.vhd \
                  ddc_gain_lut.vhd ddc_fixed_pkg.vhd output_arbiter.vhd axis_switch_n_to_1.vhd \
-                 vita_packetizer.vhd vita_framer.vhd pkt_level.vhd}]
+                 vita_packetizer.vhd vita_framer.vhd pkt_level.vhd wfft_spectrum.vhd wfft_fft.vhd}]
   if {[llength $ddc_vhd]} { set_property file_type {VHDL 2008} $ddc_vhd }
   # Native IP: add the four DDC cores from the sdrlab managed-IP build (unedited, so
   # their relative COE paths resolve and they stay unlocked) and OOC-synthesize them
@@ -132,7 +132,7 @@ if {$prj_name eq "ddc"} {
   } else {
     set ddc_ip_src [file normalize ../../../../vivado/build/ip_managed/ip_managed.srcs/sources_1/ip]
   }
-  set ddc_cores {ddc_cic ddc_fir wide_fir axis_switch_core}
+  set ddc_cores {ddc_cic ddc_fir wide_fir axis_switch_core wfft_fft_core}
   set ddc_xci {}
   foreach c $ddc_cores {
     if {[file exists $ddc_ip_src/$c/$c.xci]} { lappend ddc_xci $ddc_ip_src/$c/$c.xci }

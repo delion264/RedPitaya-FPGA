@@ -19,6 +19,14 @@
 		reg-names = "regset", "buffer";
 		linux,uio-name = "ddc_iq";
 	};
+	/* Spectrum DMA: dma_csr regset (sys[1] = 0x4010_0000) + its DDR ring buffer
+	 * (kernel-reserved). The wfft runs concurrently with the DDC tuners. */
+	ddc_spec: ddc_spec@40100000 {
+		compatible = "generic-uio";
+		reg = <0x40100000 0x1000>, <0x02000000 0x01000000>;
+		reg-names = "regset", "buffer";
+		linux,uio-name = "ddc_spec";
+	};
 };
 
 /*
